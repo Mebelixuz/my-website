@@ -1,0 +1,357 @@
+<!DOCTYPE html>
+<html lang="uz">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Onlayn kesish</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css">
+    <!-- SheetJS (xlsx) kutubxonasi -->
+    <script src="https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js"></script>
+</head>
+<body>
+    <div class="d-flex justify-content-between align-items-center p-3">
+        <img src="logotip.png" width="200" alt="Logo">
+    </div>
+
+    <form id="dataForm" class="p-3">
+        <div class="row g-3">
+            <div class="col-md-2">
+                <label for="part-name" class="form-label">Ismingiz</label>
+                <input type="text" class="form-control" id="part-name" placeholder="Ismingizni kiriting" maxlength="30" required>
+            </div>
+            <div class="col-md-2">
+                <label for="part-number" class="form-label">Telefon raqami</label>
+                <input type="tel" class="form-control" id="part-number" placeholder="+998 00 000 00 00" required>
+            </div>
+            <div class="col-md-2">
+                <label for="doc-name" class="form-label">Material nomi</label>
+                <input type="text" class="form-control" id="doc-name" placeholder="Nomini kiriting" required>
+            </div>
+            <div class="col-md-2">
+                <label for="kromka-name" class="form-label">Kromka qalinligi</label>
+                <input type="text" class="form-control" id="kromka-name" placeholder="0.6 yoki 1" required>
+            </div>
+        </div>
+        <div class="mt-4 d-flex gap-3 flex-wrap">
+            <button type="button" class="btn btn-success" onclick="exportToExcel()">
+                <i class="fas fa-download"></i> Yuklab olish
+            </button>
+            <button type="button" class="btn btn-primary" onclick="sendToTelegram()">
+                <i class="fab fa-telegram-plane"></i> Buyurtma berish
+            </button>
+        </div>
+    </form>
+
+    <div class="p-3">
+        <table class="table table-bordered mt-3" id="dataTable">
+            <thead>
+                <tr>
+                    <th>Detal nomi</th>
+                    <th>Uzunligi (mm)</th>
+                    <th>Eni (mm)</th>
+                    <th>Soni</th>
+                    <th>Tekstura</th>
+                    <th>Kromka uzunlik</th>
+                    <th>Kromka eni</th>
+                    <th>Boshqa harakat</th>
+                </tr>
+            </thead>
+            <tfoot>
+                <tr>
+                    <td>
+                        <select class="form-control" id="part-type" required>
+                            <option value="detal">Detal</option>
+                            <option value="Tepa qism">Tepa qism</option>
+                            <option value="yon-qism">Yon qism</option>
+                            <option value="stoyka">Stoyka</option>
+                            <option value="pastki-qism">Pastki qism</option>
+                            <option value="polka">Polka</option>
+                            <option value="orqa-devor">Orqa devor</option>
+                            <option value="sokl">Sokl</option>
+                            <option value="fasad">Fasad</option>                     
+                            <option value="planka">Planka</option>
+                        </select>
+                    </td>
+                    <td>
+                        <input type="number" class="form-control" id="length" min="50" max="2790" placeholder="Uzunlik" required>
+                    </td>
+                    <td>
+                        <input type="number" class="form-control" id="width" min="50" max="2060" placeholder="Eni" required>
+                    </td>
+                    <td>
+                        <input type="number" class="form-control" id="quantity" min="1" max="99" placeholder="Soni" required>
+                    </td>
+                    <td>
+                        <div class="form-control text-center">
+                            <input type="checkbox" id="texture" style="width: 20px; height: 20px;">
+                        </div>
+                    </td>
+                    <td>
+                        <div class="form-control d-flex justify-content-between">
+                            <input type="checkbox" id="edge-length-1">
+                            <input type="checkbox" id="edge-length-2">
+                        </div>
+                    </td>
+                    <td>
+                        <div class="form-control d-flex justify-content-between">
+                            <input type="checkbox" id="edge-width-1">
+                            <input type="checkbox" id="edge-width-2">
+                        </div>
+                    </td>
+                    <td>
+                      <button type="button" class="btn btn-success w-100" id="addBtn" onclick="addData()">Qo‘shish</button>
+                    </td>
+                </tr>
+            </tfoot>
+            <tbody>
+            
+            </tbody>
+        </table>
+    </div>
+
+<script>
+let editingRow = null;
+let oldRowData = null;
+
+function addData() {
+    const partType = document.getElementById('part-type').value;
+    const length = document.getElementById('length').value;
+    const width = document.getElementById('width').value;
+    const quantity = document.getElementById('quantity').value;
+    const texture = document.getElementById('texture').checked ? "1" : " "; // Belgilangan bo'lsa 1, bo'lmasa bo'sh joy
+    const edgeLength1 = document.getElementById('edge-length-1').checked ? "1" : " "; // Belgilangan bo'lsa 1, bo'lmasa bo'sh joy
+    const edgeLength2 = document.getElementById('edge-length-2').checked ? "1" : " "; // Belgilangan bo'lsa 1, bo'lmasa bo'sh joy
+    const edgeWidth1 = document.getElementById('edge-width-1').checked ? "1" : " "; // Belgilangan bo'lsa 1, bo'lmasa bo'sh joy
+    const edgeWidth2 = document.getElementById('edge-width-2').checked ? "1" : " "; // Belgilangan bo'lsa 1, bo'lmasa bo'sh joy
+
+    if (!length || !width || !quantity) {
+        alert("Barcha maydonlarni to‘ldiring!");
+        return;
+    }
+
+    const table = document.getElementById('dataTable').getElementsByTagName('tbody')[0];
+
+    // Yangi qator qo‘shish
+    const newRow = table.insertRow();
+    newRow.innerHTML = `
+        <td>${partType}</td>
+        <td>${length}</td>
+        <td>${width}</td>
+        <td>${quantity}</td>
+        <td>${texture}</td>
+        <td>${edgeLength1} ${edgeLength2}</td>
+        <td>${edgeWidth1} ${edgeWidth2}</td>
+        <td>
+            <button class="btn btn-warning btn-sm me-1" onclick="editRow(this)" title="Tahrirlash">
+                <i class="fa fa-pen"></i>
+            </button>
+            <button class="btn btn-danger btn-sm" onclick="deleteRow(this)" title="O‘chirish">
+                <i class="fa fa-trash"></i>
+            </button>
+        </td>
+    `;
+
+    clearInputs();
+}
+
+function clearInputs() {
+    document.getElementById('part-type').value = 'detal';
+    document.getElementById('length').value = '';
+    document.getElementById('width').value = '';
+    document.getElementById('quantity').value = '';
+    document.getElementById('texture').checked = false;
+    document.getElementById('edge-length-1').checked = false;
+    document.getElementById('edge-length-2').checked = false;
+    document.getElementById('edge-width-1').checked = false;
+    document.getElementById('edge-width-2').checked = false;
+    document.getElementById('addBtn').innerText = "Qo‘shish";
+}
+
+function deleteRow(btn) {
+    if (editingRow && editingRow === btn.closest('tr')) {
+        editingRow = null;
+        oldRowData = null;
+    }
+    btn.closest('tr').remove();
+}
+
+function editRow(btn) {
+    if (editingRow) return;
+
+    const row = btn.closest('tr');
+    editingRow = row;
+
+    const cells = row.cells;
+    const partType = cells[0].innerText;
+    const length = cells[1].innerText;
+    const width = cells[2].innerText;
+    const quantity = cells[3].innerText;
+    const texture = cells[4].innerText === "1";
+    const edgeLengths = cells[5].innerText.split(' ').map(s => s.trim());
+    const edgeWidths = cells[6].innerText.split(' ').map(s => s.trim());
+
+    oldRowData = [
+        partType, length, width, quantity,
+        cells[4].innerText,
+        cells[5].innerText,
+        cells[6].innerText
+    ];
+
+    row.innerHTML = `
+        <td>
+            <select class="form-control" id="edit-part-type">
+                <option value="detal">Detal</option>
+                <option value="Tepa qism">Tepa qism</option>
+                <option value="yon-qism">Yon qism</option>
+                <option value="stoyka">Stoyka</option>
+                <option value="pastki-qism">Pastki qism</option>
+                <option value="polka">Polka</option>
+                <option value="orqa-devor">Orqa devor</option>
+                <option value="sokl">Sokl</option>
+                <option value="fasad">Fasad</option>
+                <option value="planka">Planka</option>
+            </select>
+        </td>
+        <td><input type="number" class="form-control" id="edit-length" value="${length}" min="50" max="2790" required></td>
+        <td><input type="number" class="form-control" id="edit-width" value="${width}" min="50" max="2060" required></td>
+        <td><input type="number" class="form-control" id="edit-quantity" value="${quantity}" min="1" max="99" required></td>
+        <td>
+            <div class="form-control text-center">
+                <input type="checkbox" id="edit-texture" style="width: 20px; height: 20px;" ${texture ? 'checked' : ''}>
+            </div>
+        </td>
+        <td>
+            <div class="form-control d-flex justify-content-between">
+                <input type="checkbox" id="edit-edge-length-1" ${edgeLengths[0] === "1" ? 'checked' : ''}>
+                <input type="checkbox" id="edit-edge-length-2" ${edgeLengths[1] === "1" ? 'checked' : ''}>
+            </div>
+        </td>
+        <td>
+            <div class="form-control d-flex justify-content-between">
+                <input type="checkbox" id="edit-edge-width-1" ${edgeWidths[0] === "1" ? 'checked' : ''}>
+                <input type="checkbox" id="edit-edge-width-2" ${edgeWidths[1] === "1" ? 'checked' : ''}>
+            </div>
+        </td>
+        <td>
+            <button class="btn btn-success btn-sm me-1" onclick="saveRow(this)">Saqlash</button>
+            <button class="btn btn-secondary btn-sm" onclick="cancelEdit()">Bekor qilish</button>
+        </td>
+    `;
+    document.getElementById('edit-part-type').value = partType;
+}
+
+function saveRow(btn) {
+    const row = btn.closest('tr');
+    const partType = document.getElementById('edit-part-type').value;
+    const length = document.getElementById('edit-length').value;
+    const width = document.getElementById('edit-width').value;
+    const quantity = document.getElementById('edit-quantity').value;
+    const texture = document.getElementById('edit-texture').checked ? "1" : " ";
+    const edgeLength1 = document.getElementById('edit-edge-length-1').checked ? "1" : " ";
+    const edgeLength2 = document.getElementById('edit-edge-length-2').checked ? "1" : " ";
+    const edgeWidth1 = document.getElementById('edit-edge-width-1').checked ? "1" : " ";
+    const edgeWidth2 = document.getElementById('edit-edge-width-2').checked ? "1" : " ";
+
+    if (!length || !width || !quantity) {
+        alert("Barcha maydonlarni to‘ldiring!");
+        return;
+    }
+
+    row.innerHTML = `
+        <td>${partType}</td>
+        <td>${length}</td>
+        <td>${width}</td>
+        <td>${quantity}</td>
+        <td>${texture}</td>
+        <td>${edgeLength1} ${edgeLength2}</td>
+        <td>${edgeWidth1} ${edgeWidth2}</td>
+        <td>
+            <button class="btn btn-warning btn-sm me-1" onclick="editRow(this)" title="Tahrirlash">
+                <i class="fa fa-pen"></i>
+            </button>
+            <button class="btn btn-danger btn-sm" onclick="deleteRow(this)" title="O‘chirish">
+                <i class="fa fa-trash"></i>
+            </button>
+        </td>
+    `;
+    editingRow = null;
+    oldRowData = null;
+}
+
+function cancelEdit() {
+    if (!editingRow || !oldRowData) return;
+    editingRow.innerHTML = `
+        <td>${oldRowData[0]}</td>
+        <td>${oldRowData[1]}</td>
+        <td>${oldRowData[2]}</td>
+        <td>${oldRowData[3]}</td>
+        <td>${oldRowData[4]}</td>
+        <td>${oldRowData[5]}</td>
+        <td>${oldRowData[6]}</td>
+        <td>
+            <button class="btn btn-warning btn-sm me-1" onclick="editRow(this)" title="Tahrirlash">
+                <i class="fa fa-pen"></i>
+            </button>
+            <button class="btn btn-danger btn-sm" onclick="deleteRow(this)" title="O‘chirish">
+                <i class="fa fa-trash"></i>
+            </button>
+        </td>
+    `;
+    editingRow = null;
+    oldRowData = null;
+}
+
+function sendToTelegram() {
+    window.open('https://t.me/mebelixuz_bot', '_blank');
+}
+
+function exportToExcel() {
+    const ism = document.getElementById('part-name').value;
+    const tel = document.getElementById('part-number').value;
+    const material = document.getElementById('doc-name').value;
+    const kromka = document.getElementById('kromka-name').value;
+
+    const table = document.getElementById('dataTable');
+    const ws_data = [];
+
+    ws_data.push([
+        "Ism", ism,
+        "Telefon", tel,
+        "Material", material,
+        "Kromka", kromka
+    ]);
+    ws_data.push([]); 
+
+    const headers = [];
+    table.querySelectorAll('thead th').forEach(th => headers.push(th.innerText.trim()));
+    ws_data.push(headers);
+
+    table.querySelectorAll('tbody tr').forEach(tr => {
+        const row = [];
+        tr.querySelectorAll('td').forEach((td, i) => {
+            if (td.querySelector('input, select')) {
+                const input = td.querySelector('input, select');
+                if (input.type === "checkbox") {
+                    row.push(input.checked ? "1" : " ");
+                } else {
+                    row.push(input.value || input.options?.[input.selectedIndex]?.text || "");
+                }
+            } else {
+                row.push(td.innerText.trim());
+            }
+        });
+        
+        if (row.length === headers.length) ws_data.push(row);
+    });
+
+    const wb = XLSX.utils.book_new();
+    const ws = XLSX.utils.aoa_to_sheet(ws_data);
+    XLSX.utils.book_append_sheet(wb, ws, "Jadval");
+
+    XLSX.writeFile(wb, "jadval.xlsx");
+}
+</script>
+</body>
+</html>
